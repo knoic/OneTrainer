@@ -228,7 +228,14 @@ class BoundaryOffloadCheckpointLayer(BaseCheckpointLayer):
         if self.layer_index == 0:
             self.conductor.start_forward(backward_follows=True)
 
-        args = _apply_boundary(LoadBoundary, self.conductor, self.layer_index, args)
+        # LoRA-only paths can enter a block with inputs that do not require gradients. In that
+        # case there is no tensor for LoadBoundary to wrap, but the layer still has to be resident
+        # on the train device before the compiled block is traced/executed.
+        has_grad_input = any(isinstance(value, torch.Tensor) and value.requires_grad for value in args)
+        if has_grad_input:
+            args = _apply_boundary(LoadBoundary, self.conductor, self.layer_index, args)
+        else:
+            self.conductor.before_layer(self.layer_index, is_forward=True)
         output = self.__run_block(args)
         output_tuple = output if isinstance(output, tuple) else (output,)
         output_tuple = _apply_boundary(EvictBoundary, self.conductor, self.layer_index, output_tuple)
