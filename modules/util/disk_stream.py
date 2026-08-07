@@ -35,6 +35,20 @@ def _current_device(module: nn.Module) -> torch.device:
     return torch.device("meta")
 
 
+def _reset_mixed_meta_module(module: nn.Module):
+    """Drop a partially streamed module so the next materialize can refill it atomically.
+
+    A failed/interruptible stream can leave some parameters real and others on ``meta``.  Calling
+    ``module.to(cpu)`` on that mixed state is unsupported by PyTorch (and raises error 1455's
+    follow-up ``Cannot copy out of meta tensor``).  Streamed components are frozen, so discarding
+    the partial copy is safe and avoids carrying a corrupt half-materialized state forward.
+    """
+    parameters = list(module.parameters())
+    if parameters and any(parameter.is_meta for parameter in parameters) and any(
+            not parameter.is_meta for parameter in parameters):
+        evict_to_meta(module)
+
+
 def evict_to_meta(module: nn.Module):
     for sub_module in module.modules():
         for name, parameter in list(sub_module.named_parameters(recurse=False)):
@@ -73,6 +87,7 @@ def stream_module_to(
 ):
     # module.to()-style entry point for a materialize-on-demand component; see the module-level comment for the
     # materialize/evict semantics. Idempotent; train_dtype is used only when materializing.
+    _reset_mixed_meta_module(module)
     if device.type not in ("meta", temp_device.type):
         # target is the compute device -> materialize the module onto it
         current = _current_device(module)
