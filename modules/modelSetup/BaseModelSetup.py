@@ -282,7 +282,7 @@ class BaseModelSetup(
         # a streamed module (materialize_fn set) stays on meta until materialized and is quantized per-materialize,
         # so there is nothing to quantize here; a non-streamed module is quantized now.
         if materialize_fn is None:
-            quantize_layers(module, self.train_device, train_dtype, config)
+            quantize_layers(module, self.train_device, train_dtype, config, compress=config_part.compression)
 
         if attention_mask is not None:
             self._set_attention_backend(module, config.attention_mechanism, mask=attention_mask)

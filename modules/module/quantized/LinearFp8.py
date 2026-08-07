@@ -1,3 +1,4 @@
+from modules.module.quantized.mixin.CompressedWeightMixin import CompressedWeightMixin
 from modules.module.quantized.mixin.QuantizedLinearMixin import QuantizedLinearMixin
 from modules.module.quantized.mixin.QuantizedModuleMixin import QuantizedModuleMixin
 
@@ -9,6 +10,7 @@ class LinearFp8(
     nn.Linear,
     QuantizedModuleMixin,
     QuantizedLinearMixin,
+    CompressedWeightMixin,
 ):
     is_quantized: bool
 
@@ -20,8 +22,11 @@ class LinearFp8(
         self._scale = torch.tensor(1.0, dtype=torch.float)
         self.register_buffer("scale", self._scale)
         self.compute_dtype = None
+        self._init_compressed_state()
 
     def original_weight_shape(self) -> tuple[int, ...]:
+        if self._compressed:
+            return self._weight_shape
         return self.weight.shape
 
     def mark_needs_requantization(self):
@@ -35,9 +40,11 @@ class LinearFp8(
     def unquantized_weight(self, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         # 'scale' is not offloaded, so it can sit on the train device while 'weight' is parked on the temp device
         if self._scale is not None:
-            return self.weight.detach().to(dtype) * self._scale.to(dtype=dtype, device=self.weight.device)
+            weight = self._decompress(self.weight.detach()) if self._compressed else self.weight.detach()
+            return weight.to(dtype) * self._scale.to(dtype=dtype, device=self.weight.device)
         else:
-            return self.weight.detach().to(dtype=dtype)
+            weight = self._decompress(self.weight.detach()) if self._compressed else self.weight.detach()
+            return weight.to(dtype=dtype)
 
     def quantize(self, device: torch.device | None = None):
         if self.is_quantized:
@@ -57,9 +64,11 @@ class LinearFp8(
             if device is not None:
                 weight = weight.to(device=orig_device)
         self.weight.data = weight
+        if self.compress:
+            self._compress_weight(device=device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        weight = self.weight.detach()
+        weight = self._decompress(self.weight.detach()) if self._compressed else self.weight.detach()
         weight = weight.to(dtype=self.compute_dtype if self.compute_dtype is not None else x.dtype)
 
         if self._scale is not None:
