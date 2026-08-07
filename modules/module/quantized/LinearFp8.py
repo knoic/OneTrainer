@@ -24,6 +24,14 @@ class LinearFp8(
     def original_weight_shape(self) -> tuple[int, ...]:
         return self.weight.shape
 
+    def mark_needs_requantization(self):
+        self.is_quantized = False
+
+    def predict_offload_bytes(self) -> int:
+        weight_bytes = self.weight.numel()
+        bias_bytes = self.bias.numel() * self.bias.element_size() if self.bias is not None else 0
+        return weight_bytes + bias_bytes
+
     def unquantized_weight(self, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         # 'scale' is not offloaded, so it can sit on the train device while 'weight' is parked on the temp device
         if self._scale is not None:

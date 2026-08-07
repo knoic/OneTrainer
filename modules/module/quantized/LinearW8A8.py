@@ -86,22 +86,32 @@ class LinearW8A8(
         assert dtype in [torch.int8, torch.float8_e4m3fn]
         self._dtype = dtype
 
-        self.__is_quantized = False
+        self.is_quantized = False
         self.compute_dtype = None
         self.register_buffer("scale", torch.tensor(1.0, dtype=torch.float32))
 
     def original_weight_shape(self) -> tuple[int, ...]:
         return self.weight.shape
 
+    def mark_needs_requantization(self):
+        self.is_quantized = False
+
+    def predict_offload_bytes(self) -> int:
+        weight_bytes = self.weight.numel()
+        bias_bytes = self.bias.numel() * self.bias.element_size() if self.bias is not None else 0
+        return weight_bytes + bias_bytes
+
     def unquantized_weight(self, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         # 'scale' is not offloaded, so it can sit on the train device while 'weight' is parked on the temp device
+        if not self.is_quantized:
+            return self.weight.detach().to(dtype)
         return dequantize(self.weight.detach(), self.scale.to(device=self.weight.device)).to(dtype)
 
     @torch.no_grad()
     def quantize(self, device: torch.device | None = None):
-        if self.__is_quantized:
+        if self.is_quantized:
             return
-        self.__is_quantized = True
+        self.is_quantized = True
 
         weight = self.weight.detach()
         orig_device = weight.device
@@ -122,7 +132,7 @@ class LinearW8A8(
 
     def forward(self, x_orig: torch.Tensor) -> torch.Tensor:
         assert not self.weight.requires_grad
-        assert self.__is_quantized
+        assert self.is_quantized
         x = x_orig.reshape(-1, x_orig.shape[-1])
 
         if x.shape[0] > 16:
