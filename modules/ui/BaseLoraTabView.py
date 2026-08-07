@@ -90,6 +90,16 @@ class BaseLoraTabView:
                                   tooltip="Applies a scaling factor to the learned weights. This ensures that the effective learning rate remains consistent across different block sizes. Without this, different block sizes require significantly different learning rates.")
             self.components.switch(master, 2, 4, ui_state, "oft_scaled")
 
+            # Matrix Exponential CANS
+            self.components.label(master, 4, 3, "Matrix Exponential CANS",
+                                  tooltip="Replaces Cayley-Neumann with Matrix Exponential CANS to improve OFT orthogonalization stability.")
+            self.components.switch(master, 4, 4, ui_state, "oft_cans")
+
+            # Spectral norm clipping
+            self.components.label(master, 5, 0, "Spectral Norm Clipping",
+                                  tooltip="Clips the OFT spectral norm. Use -1 for the recommended automatic value; leave empty to disable.")
+            self.components.entry(master, 5, 1, ui_state, "oft_clipped_norm")
+
             # Dropout Percentage
             self.components.label(master, 2, 0, "Dropout Probability",
                                   tooltip="Dropout probability. This percentage of the rotated adapter nodes that will be randomly restored to the base model initial statue. Helps with overfitting. 0 disables, 1 maximum.")

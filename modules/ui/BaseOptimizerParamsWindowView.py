@@ -105,7 +105,7 @@ class BaseOptimizerParamsWindowView:
             'use_schedulefree': {'title': 'use_schedulefree', 'tooltip': 'Use Schedulefree method', 'type': 'bool'},
             'use_orthograd': {'title': 'use_orthograd', 'tooltip': 'Use orthograd method', 'type': 'bool'},
             'nnmf_factor': {'title': 'Factored Optimizer', 'tooltip': 'Enables a memory-efficient mode by applying fast low-rank factorization to the optimizers states. It combines factorization for magnitudes with 1-bit compression for signs, drastically reducing VRAM usage and allowing for larger models or batch sizes. This is an approximation which may slightly alter training dynamics.', 'type': 'bool'},
-            'orthogonal_gradient': {'title': 'OrthoGrad', 'tooltip': 'Reduces overfitting by removing the gradient component parallel to the weight, thus improving generalization.', 'type': 'bool'},
+            'orthogonal_gradient': {'title': 'OrthoGrad', 'tooltip': 'Removes the gradient component parallel to the weight. Choose disabled, flattened, or iterative.', 'type': 'OrthoGrad'},
             'use_atan2': {'title': 'Atan2 Scaling', 'tooltip': 'A robust replacement for eps, which also incorporates gradient clipping, bounding and stabilizing the optimizer updates.', 'type': 'bool'},
             'use_AdEMAMix': {'title': 'AdEMAMix EMA', 'tooltip': 'Adds a second, slow-moving EMA, which is combined with the primary momentum to stabilize updates, and accelerate the training.', 'type': 'bool'},
             'beta3_ema': {'title': 'Beta3 EMA', 'tooltip': 'Coefficient for slow-moving EMA of AdEMAMix.', 'type': 'float'},
@@ -132,6 +132,19 @@ class BaseOptimizerParamsWindowView:
             'approx_mars': {'title': 'Approx MARS-M', 'tooltip': 'Enables Approximated MARS-M, a variance reduction technique. It uses the previous step\'s gradient to correct the current update, leading to lower losses and improved convergence stability. This requires additional state to store the previous gradient.', 'type': 'bool'},
             'auto_kappa_p': {'title': 'Auto Lion-K', 'tooltip': 'Automatically determines the optimal P-value based on layer dimensions. Uses p=2.0 (Spherical) for 4D (Conv) tensors for stability and rotational invariance, and p=1.0 (Sign) for 2D (Linear) tensors for sparsity. Overrides the manual P-value. Recommend for unet models.', 'type': 'bool'},
             'compile': {'title': 'Compiled Optimizer', 'tooltip': 'Enables PyTorch compilation for the optimizer internal step logic. This is intended to improve performance by allowing PyTorch to fuse operations and optimize the computational graph.', 'type': 'bool'},
+            'spectral_normalization': {'title': 'Spectral Scaling', 'tooltip': 'Rescales updates based on layer dimensions and training method.', 'type': 'bool'},
+            'stochastic_sign': {'title': 'Adaptive Sign', 'tooltip': 'Uses an adaptive sign update that respects gradient direction and magnitude.', 'type': 'bool'},
+            'centered_wd': {'title': 'Centered Weight Decay', 'tooltip': 'Decays weights toward their initial values instead of zero.', 'type': 'float'},
+            'centered_wd_mode': {'title': 'Centered WD Mode', 'tooltip': 'Storage format for centered weight-decay anchors.', 'type': 'CenteredWDMode'},
+            'factored_2nd': {'title': 'Factored 2nd', 'tooltip': 'Factorizes the second-moment optimizer state.', 'type': 'bool'},
+            'fisher_wd': {'title': 'Fisher Weight Decay', 'tooltip': 'Applies adaptive weight decay based on the estimated Fisher information.', 'type': 'bool'},
+            'state_precision': {'title': 'State Precision', 'tooltip': 'Precision/quantization format for optimizer states.', 'type': 'StatePrecision'},
+            'orthogonal_sinkhorn': {'title': 'Orthogonal Sinkhorn', 'tooltip': 'Applies iterative orthogonal projection to updates.', 'type': 'bool'},
+            'sinkhorn_iterations': {'title': 'Sinkhorn Iterations', 'tooltip': 'Number of orthogonal projection iterations.', 'type': 'int'},
+            'normed_momentum': {'title': 'Normed Momentum', 'tooltip': 'Applies momentum after optimizer normalization.', 'type': 'bool'},
+            'nesterov_coef': {'title': 'Nesterov Coef', 'tooltip': 'Mixing coefficient for Nesterov momentum.', 'type': 'float'},
+            'snr_cond': {'title': 'SNR Preconditioning', 'tooltip': 'Preconditions updates by signal-to-noise ratio.', 'type': 'bool'},
+            'geometric_wd': {'title': 'Geometric Weight Decay', 'tooltip': 'Applies geometry-aware weight decay.', 'type': 'bool'},
         }
         # @formatter:on
 
@@ -161,6 +174,15 @@ class BaseOptimizerParamsWindowView:
                     frame, 0, 1, "...", open_muon_adam_cb,
                     tooltip="Configure the auxiliary AdamW_adv optimizer",
                     width=20, padx=5)
+            elif type == 'CenteredWDMode':
+                self.components.options(master, row, col + 1, ["full", "float8", "int8", "int4"], optimizer_ui_state, key,
+                                        command=update_user_pref_cb)
+            elif type == 'StatePrecision':
+                self.components.options(master, row, col + 1, ["auto", "factored", "fp32", "bf16_sr", "int8_sr"], optimizer_ui_state, key,
+                                        command=update_user_pref_cb)
+            elif type == 'OrthoGrad':
+                self.components.options(master, row, col + 1, ["disabled", "flattened", "iterative"], optimizer_ui_state, key,
+                                        command=update_user_pref_cb)
             elif type != 'bool':
                 self.components.entry(master, row, col + 1, optimizer_ui_state, key,
                                       command=update_user_pref_cb)
