@@ -35,8 +35,19 @@ from tqdm import tqdm
 # huggingface_hub 1.16+ uses httpx, which logs every HTTP request/response at INFO level.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# reader threads striping the checkpoint into host RAM while the main thread does H2D + inline quant
-STREAM_READER_THREADS = 4
+# Reader threads stripe the checkpoint into host RAM while the main thread does H2D + inline quant.
+# Windows maps each safe_open handle against the system commit limit; several handles plus the
+# bounded clone queue can therefore hit ERROR_COMMITMENT_LIMIT (os error 1455) even when ordinary
+# free RAM still looks sufficient. Keep the conservative single-reader default on Windows, while
+# allowing faster machines to opt back into concurrency explicitly.
+try:
+    _stream_reader_threads_override = int(os.environ.get("ONETRAINER_STREAM_READER_THREADS", ""))
+except ValueError:
+    _stream_reader_threads_override = 0
+STREAM_READER_THREADS = max(
+    1,
+    _stream_reader_threads_override or (1 if os.name == "nt" else 4),
+)
 
 
 def __stream_reader(
