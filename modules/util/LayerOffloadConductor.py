@@ -854,6 +854,7 @@ class LayerOffloadConductor:
         torch_gc()
 
         self.__wait_all_layer_transfers()
+        self.__wait_all_activation_transfers()
 
         log("to temp device")
 
@@ -1166,6 +1167,25 @@ class LayerOffloadConductor:
     def __wait_all_layer_transfers(self):
         for layer_index in range(len(self.__layers)):
             self.__wait_layer_transfer(layer_index)
+
+    def __wait_all_activation_transfers(self):
+        """Drain activation-copy events before recycling the activation allocator.
+
+        Activation offloading uses a separate CUDA stream.  Its events are normally consumed by
+        ``unpack_activation``; materialize/evict can run between passes, so they must also drain
+        any queued transfer events before deallocating or reusing the activation cache.
+        """
+        for event in list(self.__inflight_transfer_events):
+            event.synchronize("wait activation transfer")
+        self.__inflight_transfer_events.clear()
+
+        # A prefetched activation owns a completion event until unpack consumes it.  Synchronize
+        # those events as well so a subsequent cache deallocation cannot race an H2D copy.
+        for handles in self.__boundary_activations.values():
+            for handle in handles:
+                if handle.event is not None:
+                    handle.event.synchronize("wait activation reload")
+                    handle.event = None
 
     def __wait_layer_train(self, layer_index: int):
         self.__layer_train_event_map[layer_index] \
