@@ -1083,6 +1083,17 @@ class LayerOffloadConductor:
 
         self.__schedule_layer_offload(layer_index, is_forward, not self.__backward_follows)
 
+        # The strategy normally includes the current layer in its load window. Keep this
+        # invariant explicit: a boundary can be reached while a layer is still mapped to the
+        # CPU/full-model buffer (notably on the first simplex activation), and entering a compiled
+        # block with such a parameter produces a CUDA/CPU fake-device propagation error. Also wait
+        # for an async H2D transfer that was just scheduled; the scheduler's leading wait only
+        # drains the previous transfer.
+        if self.__offload_layers:
+            if not device_equals(self.__layer_device_map[layer_index], self.__train_device):
+                self.__schedule_layer_to(layer_index, self.__train_device, is_forward=is_forward)
+            self.__wait_layer_transfer(layer_index)
+
     def after_layer(self, layer_index: int, activations: Any):
         # called once this layer's compute is enqueued. Keeps the block's output/grad alive until the train
         # stream reaches it, and records the event a later offload of this layer has to wait for.
