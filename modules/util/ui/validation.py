@@ -223,7 +223,9 @@ class BaseFieldValidator(ABC):
                 v = int(value)
             elif declared_type is float:
                 v = float(value)
-                if v < 0:
+                # OFT uses -1 as a sentinel for automatic spectral-norm clipping.
+                # Keep the general non-negative float rule for every other field.
+                if v < 0 and not (self.var_name == "oft_clipped_norm" and v == -1):
                     return "Value must be non-negative"
             elif declared_type is bool:
                 if value.lower() not in ("true", "false", "0", "1"):
