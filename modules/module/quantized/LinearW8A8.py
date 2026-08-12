@@ -153,6 +153,12 @@ class LinearW8A8(
             return self._weight_shape
         return self.weight.shape
 
+    def mark_needs_requantization(self):
+        # Disk streaming replaces the packed weight with a meta tensor. The next materialize
+        # must quantize the freshly streamed full-precision weight again.
+        self.__is_quantized = False
+        self._compressed = False
+
     def unquantized_weight(self, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         weight = self._decompress(self.weight.detach()) if self._compressed else self.weight.detach()
         # 'scale' is not offloaded, so it can sit on the train device while 'weight' is parked on the temp device
