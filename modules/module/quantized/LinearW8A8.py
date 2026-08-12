@@ -159,6 +159,13 @@ class LinearW8A8(
         self.__is_quantized = False
         self._compressed = False
 
+    def predict_offload_bytes(self) -> int:
+        # W8A8 stores one byte per weight element; scale is a resident scalar and is not
+        # included in the offloaded tensor set.
+        weight_bytes = self.weight.numel()
+        bias_bytes = self.bias.numel() * self.bias.element_size() if self.bias is not None else 0
+        return weight_bytes + bias_bytes
+
     def unquantized_weight(self, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         weight = self._decompress(self.weight.detach()) if self._compressed else self.weight.detach()
         # 'scale' is not offloaded, so it can sit on the train device while 'weight' is parked on the temp device
