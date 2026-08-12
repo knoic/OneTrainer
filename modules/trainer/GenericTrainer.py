@@ -137,6 +137,8 @@ class GenericTrainer(BaseTrainer):
             model_names=model_names,
             weight_dtypes=self.config.weight_dtypes(),
             quantization=self.config.quantization,
+            stream_from_disk=self.config.stream_from_disk,
+            cache_in_ram=self.config.cache_in_ram(),
         )
         self.model.train_config = self.config
 

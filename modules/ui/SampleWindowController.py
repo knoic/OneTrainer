@@ -90,6 +90,8 @@ class SampleWindowController:
             model_names=model_names,
             weight_dtypes=self.initial_train_config.weight_dtypes(),
             quantization=self.initial_train_config.quantization,
+            stream_from_disk=self.initial_train_config.stream_from_disk,
+            cache_in_ram=self.initial_train_config.cache_in_ram(),
         )
         model.train_config = self.initial_train_config
 
@@ -135,17 +137,16 @@ class SampleWindowController:
 
             self.model.eval()
 
-            try:
-                self.model_sampler.sample(
-                    sample_config=sample,
-                    destination=sample_path,
-                    image_format=self.current_train_config.sample_image_format,
-                    video_format=self.current_train_config.sample_video_format,
-                    audio_format=self.current_train_config.sample_audio_format,
-                    on_sample=on_sample,
-                    on_update_progress=on_update_progress,
-                )
-            finally:
-                # the sampler materializes parts on demand; release VRAM now that this
-                # standalone sample window is idle again
-                self.model.evict()
+            self.model_sampler.sample(
+                sample_config=sample,
+                destination=sample_path,
+                image_format=self.current_train_config.sample_image_format,
+                video_format=self.current_train_config.sample_video_format,
+                audio_format=self.current_train_config.sample_audio_format,
+                on_sample=on_sample,
+                on_update_progress=on_update_progress,
+            )
+
+            # the sampler materializes parts on demand and no longer self-evicts;
+            # release VRAM now that this standalone sample window is idle again
+            self.model.evict()
